@@ -17,6 +17,49 @@
 - **Multi-stage Dockerfile** with slim runtime image
 - **Dev Container** support for zero-setup onboarding
 
+## 🏗 Architecture
+
+```mermaid
+flowchart TB
+    Client([Client / Scalar UI])
+
+    subgraph API["API Layer — FastAPI"]
+        direction LR
+        RBooks["/books router"]
+        RSearch["/books/search/semantic"]
+        RHealth["/health"]
+    end
+
+    subgraph Service["Service Layer"]
+        BookService["BookService<br/>• orchestration<br/>• BookNotFoundError → 404"]
+    end
+
+    subgraph Repo["Repository Layer"]
+        BookRepository["BookRepository<br/>• SQLAlchemy 2.0 async<br/>• filters, pagination, sort"]
+    end
+
+    subgraph AI["AI Layer (optional)"]
+        direction TB
+        Summary["generate_summary<br/>openai/gpt-4o-mini"]
+        Embed["generate_embedding<br/>baai/bge-m3"]
+        ORClient["OpenRouter client<br/>openai SDK + tenacity retry"]
+        Summary --> ORClient
+        Embed --> ORClient
+    end
+
+    DB[("SQLite<br/>books + embedding BLOB")]
+    OR[("OpenRouter<br/>unified LLM gateway")]
+
+    Client -->|HTTPS| API
+    API --> Service
+    Service --> Repo
+    Service -.->|auto-summarize<br/>+ embed on write| AI
+    Repo --> DB
+    ORClient -.->|HTTPS| OR
+```
+
+AI is strictly additive — `LLMUnavailableError` and `openai.APIError` on the OpenRouter path are caught in the service, so a downstream LLM outage lets the book persist without a summary or embedding rather than surfacing as a 5xx. See the standalone [architecture diagram](docs/diagrams/architecture.md) for notes and the [request flow](docs/diagrams/request-flow.md) for the detailed `POST /books` sequence.
+
 ## 🚀 Quick start
 
 ```bash
