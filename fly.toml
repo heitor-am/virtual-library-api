@@ -1,0 +1,36 @@
+app = "virtual-library-api"
+primary_region = "gru"
+
+[build]
+
+[env]
+  DATABASE_URL = "sqlite+aiosqlite:////data/library.db"
+  ENVIRONMENT = "production"
+  LOG_LEVEL = "INFO"
+  OPENROUTER_APP_NAME = "Virtual Library API"
+  OPENROUTER_APP_URL = "https://virtual-library-api.fly.dev"
+  AI_FEATURES_ENABLED = "true"
+
+[[mounts]]
+  source = "library_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/health"

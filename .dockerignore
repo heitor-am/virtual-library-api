@@ -16,7 +16,6 @@ htmlcov
 *.sqlite3
 docs/
 tests/
-README.md
 Makefile
 .devcontainer
 .dockerignore
