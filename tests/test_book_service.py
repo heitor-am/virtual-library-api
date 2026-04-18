@@ -1,11 +1,14 @@
 from datetime import date
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
+from openai import APIConnectionError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BookNotFoundError
-from app.models.book import Book
+from app.config import get_settings
+from app.core.exceptions import BookNotFoundError, LLMUnavailableError
+from app.models.book import Book, SummarySource
 from app.services.book import BookService
 
 
@@ -46,6 +49,122 @@ class TestCreate:
         result = await service.create(db, title="O Hobbit", author="Tolkien")
         assert result is sample_book
         mock_repo.create.assert_awaited_once_with(db, title="O Hobbit", author="Tolkien")
+
+
+class TestAutoSummarize:
+    @pytest.fixture(autouse=True)
+    def _ai_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+        monkeypatch.setenv("AI_FEATURES_ENABLED", "true")
+        get_settings.cache_clear()
+
+    async def test_generates_summary_when_missing(
+        self, mock_repo: AsyncMock, db: AsyncMock, sample_book: Book
+    ) -> None:
+        mock_repo.create.return_value = sample_book
+        summary_gen = AsyncMock(return_value="Aventura épica")
+        service = BookService(repo=mock_repo, summary_generator=summary_gen)
+
+        await service.create(
+            db, title="O Hobbit", author="Tolkien", published_date=date(1937, 9, 21)
+        )
+
+        summary_gen.assert_awaited_once_with("O Hobbit", "Tolkien")
+        _, kwargs = mock_repo.create.call_args
+        assert kwargs["summary"] == "Aventura épica"
+        assert kwargs["summary_source"] == SummarySource.AI
+
+    async def test_skips_generation_when_summary_provided(
+        self, mock_repo: AsyncMock, db: AsyncMock, sample_book: Book
+    ) -> None:
+        mock_repo.create.return_value = sample_book
+        summary_gen = AsyncMock()
+        service = BookService(repo=mock_repo, summary_generator=summary_gen)
+
+        await service.create(
+            db,
+            title="O Hobbit",
+            author="Tolkien",
+            published_date=date(1937, 9, 21),
+            summary="User-provided summary",
+        )
+
+        summary_gen.assert_not_awaited()
+        _, kwargs = mock_repo.create.call_args
+        assert kwargs["summary"] == "User-provided summary"
+        assert "summary_source" not in kwargs
+
+    async def test_skips_generation_when_disabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        mock_repo: AsyncMock,
+        db: AsyncMock,
+        sample_book: Book,
+    ) -> None:
+        monkeypatch.setenv("AI_FEATURES_ENABLED", "false")
+        get_settings.cache_clear()
+
+        mock_repo.create.return_value = sample_book
+        summary_gen = AsyncMock()
+        service = BookService(repo=mock_repo, summary_generator=summary_gen)
+
+        await service.create(
+            db, title="O Hobbit", author="Tolkien", published_date=date(1937, 9, 21)
+        )
+
+        summary_gen.assert_not_awaited()
+
+    async def test_skips_generation_when_api_key_missing(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        mock_repo: AsyncMock,
+        db: AsyncMock,
+        sample_book: Book,
+    ) -> None:
+        monkeypatch.setenv("OPENROUTER_API_KEY", "")
+        get_settings.cache_clear()
+
+        mock_repo.create.return_value = sample_book
+        summary_gen = AsyncMock()
+        service = BookService(repo=mock_repo, summary_generator=summary_gen)
+
+        await service.create(
+            db, title="O Hobbit", author="Tolkien", published_date=date(1937, 9, 21)
+        )
+
+        summary_gen.assert_not_awaited()
+
+    async def test_creates_book_even_when_llm_fails(
+        self, mock_repo: AsyncMock, db: AsyncMock, sample_book: Book
+    ) -> None:
+        mock_repo.create.return_value = sample_book
+        summary_gen = AsyncMock(
+            side_effect=APIConnectionError(request=httpx.Request("POST", "https://openrouter.ai"))
+        )
+        service = BookService(repo=mock_repo, summary_generator=summary_gen)
+
+        await service.create(
+            db, title="O Hobbit", author="Tolkien", published_date=date(1937, 9, 21)
+        )
+
+        # Book is still created (AI error is swallowed)
+        mock_repo.create.assert_awaited_once()
+        _, kwargs = mock_repo.create.call_args
+        assert "summary" not in kwargs
+        assert "summary_source" not in kwargs
+
+    async def test_creates_book_when_llm_unavailable(
+        self, mock_repo: AsyncMock, db: AsyncMock, sample_book: Book
+    ) -> None:
+        mock_repo.create.return_value = sample_book
+        summary_gen = AsyncMock(side_effect=LLMUnavailableError("no key"))
+        service = BookService(repo=mock_repo, summary_generator=summary_gen)
+
+        await service.create(
+            db, title="O Hobbit", author="Tolkien", published_date=date(1937, 9, 21)
+        )
+
+        mock_repo.create.assert_awaited_once()
 
 
 class TestGet:
