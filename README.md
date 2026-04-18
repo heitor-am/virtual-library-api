@@ -66,10 +66,10 @@ make migration m="add books table"
 
 ## 🛠 Stack
 
-**Web:** FastAPI · Pydantic v2 · SQLAlchemy 2.0 (async) · Alembic · SQLite
-**AI:** OpenRouter (chat: `openai/gpt-4o-mini`, embeddings: `baai/bge-m3`)
-**Quality:** Ruff · mypy · pytest · Schemathesis · pre-commit
-**Infra:** Docker (multi-stage) · Fly.io · GitHub Actions
+- **Web:** FastAPI · Pydantic v2 · SQLAlchemy 2.0 (async) · Alembic · SQLite
+- **AI:** OpenRouter (chat: `openai/gpt-4o-mini`, embeddings: `baai/bge-m3`)
+- **Quality:** Ruff · mypy · pytest · Schemathesis · pre-commit
+- **Infra:** Docker (multi-stage) · Fly.io · GitHub Actions
 
 ## 📝 License
 

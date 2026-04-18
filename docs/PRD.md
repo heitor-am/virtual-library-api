@@ -9,8 +9,8 @@ tags:
 
 # PRD — Virtual Library API
 
-**Projeto:** Virtual Library API
-**Status:** Planejamento
+- **Projeto:** Virtual Library API
+- **Status:** Planejamento
 
 ---
 
