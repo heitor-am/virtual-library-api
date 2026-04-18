@@ -28,9 +28,7 @@ class TestBookCreate:
 
     def test_missing_title_is_rejected(self) -> None:
         with pytest.raises(ValidationError) as exc:
-            BookCreate.model_validate(  # type: ignore[call-arg]
-                {"author": "Tolkien", "published_date": "1937-09-21"}
-            )
+            BookCreate.model_validate({"author": "Tolkien", "published_date": "1937-09-21"})
         assert "title" in str(exc.value)
 
     def test_empty_title_is_rejected(self) -> None:
