@@ -43,7 +43,7 @@ flowchart TB
 
 ## Notes
 
-- **AI is additive, not in the critical path.** If OpenRouter is unreachable, the service catches the error and the book is still persisted — just without a summary or embedding. The API contract never degrades to 5xx because of a third-party outage.
+- **AI is additive, not in the critical path.** The service catches `LLMUnavailableError` and `openai.APIError` from the OpenRouter path, so a downstream LLM outage lets the book persist without a summary or embedding instead of surfacing as a 5xx.
 - **The repository layer is the only place that touches SQLAlchemy.** Services receive/return ORM objects but never build queries themselves.
 - **Dependency injection** (`DbDep`, `BookServiceDep`) wires everything at the router level, which is what makes integration tests easy: the `client` fixture overrides `get_db` and `get_book_service` to hand in in-memory SQLite and a stubbed service.
 

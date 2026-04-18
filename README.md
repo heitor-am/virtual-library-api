@@ -58,7 +58,7 @@ flowchart TB
     ORClient -.->|HTTPS| OR
 ```
 
-AI is strictly additive — if OpenRouter is unreachable the book is still persisted, just without a summary or embedding. See [request flow](docs/diagrams/request-flow.md) for the detailed `POST /books` sequence.
+AI is strictly additive — `LLMUnavailableError` and `openai.APIError` on the OpenRouter path are caught in the service, so a downstream LLM outage lets the book persist without a summary or embedding rather than surfacing as a 5xx. See the standalone [architecture diagram](docs/diagrams/architecture.md) for notes and the [request flow](docs/diagrams/request-flow.md) for the detailed `POST /books` sequence.
 
 ## 🚀 Quick start
 
