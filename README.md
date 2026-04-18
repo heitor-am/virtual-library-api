@@ -61,8 +61,21 @@ make migration m="add books table"
 ## 📖 Documentation
 
 - [PRD](docs/PRD.md) — scope, architecture, and decisions
-- [ADRs](docs/adr/) — Architecture Decision Records
 - [Diagrams](docs/diagrams/) — Mermaid diagrams
+
+### Architecture Decision Records
+
+Short, dated decisions with context, alternatives, and trade-offs.
+
+| # | Decision |
+|---|---|
+| [001](docs/adr/001-fastapi-over-django.md) | FastAPI over Django/Flask |
+| [002](docs/adr/002-uv-package-manager.md) | uv as package manager |
+| [003](docs/adr/003-fly-io-deployment.md) | Fly.io for deployment |
+| [004](docs/adr/004-openrouter-unified-llm-gateway.md) | OpenRouter as unified LLM gateway |
+| [005](docs/adr/005-scalar-over-swagger.md) | Scalar over Swagger UI |
+| [006](docs/adr/006-rfc-7807-errors.md) | RFC 7807 Problem Details for errors |
+| [007](docs/adr/007-bge-m3-for-multilingual-embeddings.md) | `baai/bge-m3` for multilingual embeddings |
 
 ## 🛠 Stack
 
