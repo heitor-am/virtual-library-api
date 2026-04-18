@@ -13,7 +13,7 @@ Context and conventions for automated code review. Focus feedback on what actual
 
 ## Architecture
 
-Layered: `api/routers → services → repositories → database`. Plus a parallel `app/ai/` module (client, summary, embeddings) and `app/core/` (logging, RFC 7807 exceptions).
+Layered: `app/api/routers → app/services → app/repositories → app/database`. Plus a parallel `app/ai/` module (client, summary, embeddings) and `app/core/` (logging, RFC 7807 exceptions).
 
 - **Routes are thin.** Business logic lives in services. Route handlers should mostly parse input, call the service, and return the mapped schema.
 - **Services own orchestration.** They inject callables (e.g. `summary_generator`, `embedding_generator`) so tests can swap them for mocks.
