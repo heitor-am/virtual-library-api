@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Any, List, Literal  # noqa: UP035  (builtin `list` shadowed by method)
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,6 +67,11 @@ class BookRepository:
         await db.commit()
         await db.refresh(book)
         return book
+
+    async def list_with_embeddings(self, db: AsyncSession) -> List[Book]:  # noqa: UP006
+        stmt = select(Book).where(Book.embedding.is_not(None))
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
 
     async def delete(self, db: AsyncSession, book_id: int) -> bool:
         book = await db.get(Book, book_id)

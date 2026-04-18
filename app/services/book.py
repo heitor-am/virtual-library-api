@@ -1,10 +1,16 @@
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, List  # noqa: UP035  (builtin `list` shadowed by method)
 
+import numpy as np
 from openai import APIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.embeddings import build_book_text, generate_embedding
+from app.ai.embeddings import (
+    build_book_text,
+    bulk_cosine,
+    deserialize_embedding,
+    generate_embedding,
+)
 from app.ai.summary import generate_summary
 from app.config import get_settings
 from app.core.exceptions import BookNotFoundError, LLMUnavailableError
@@ -119,6 +125,35 @@ class BookService:
         deleted = await self.repo.delete(db, book_id)
         if not deleted:
             raise BookNotFoundError(f"Book with id {book_id} not found")
+
+    async def semantic_search(
+        self,
+        db: AsyncSession,
+        query: str,
+        *,
+        top_k: int = 5,
+        min_score: float = 0.0,
+    ) -> List[tuple[Book, float]]:  # noqa: UP006
+        books = await self.repo.list_with_embeddings(db)
+        if not books:
+            return []
+
+        try:
+            query_bytes = await self.embedding_generator(query)
+        except APIError as e:
+            raise LLMUnavailableError(f"embedding service unavailable: {e}") from e
+
+        query_vec = deserialize_embedding(query_bytes)
+        matrix = np.vstack([deserialize_embedding(b.embedding) for b in books if b.embedding])
+        scores = bulk_cosine(query_vec, matrix)
+
+        pairs = [
+            (book, float(score))
+            for book, score in zip(books, scores, strict=True)
+            if score >= min_score
+        ]
+        pairs.sort(key=lambda p: p[1], reverse=True)
+        return pairs[:top_k]
 
 
 book_service = BookService()
