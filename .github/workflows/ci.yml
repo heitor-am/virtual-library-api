@@ -13,8 +13,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv sync --all-extras
@@ -24,8 +24,8 @@ jobs:
   typecheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv sync --all-extras
@@ -34,9 +34,48 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv sync --all-extras
       - run: uv run pytest
+
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras
+      - name: Start API
+        run: |
+          uv run alembic upgrade head
+          AI_FEATURES_ENABLED=false uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          for i in {1..20}; do
+            if curl -sf http://127.0.0.1:8000/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not become healthy within 20s" >&2
+          exit 1
+      - name: Run schemathesis
+        run: |
+          uv run schemathesis run http://127.0.0.1:8000/openapi.json \
+            --checks not_a_server_error \
+            --max-examples 10
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras
+      - name: Dependency audit
+        run: uv run pip-audit
+      - name: Static security analysis
+        run: uv run bandit -r app/

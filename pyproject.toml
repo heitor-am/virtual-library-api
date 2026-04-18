@@ -33,6 +33,7 @@ dev = [
     "pre-commit>=4.0",
     "schemathesis>=3.30",
     "pip-audit>=2.7",
+    "bandit>=1.7",
 ]
 
 [build-system]

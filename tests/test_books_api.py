@@ -154,6 +154,27 @@ class TestUpdateBook:
         body = response.json()
         assert body["code"] == "BOOK_NOT_FOUND"
 
+    async def test_explicit_null_on_required_field_returns_422_problem_details(
+        self, client: AsyncClient
+    ) -> None:
+        created = (await client.post("/books", json=BOOK_HOBBIT)).json()
+
+        response = await client.put(f"/books/{created['id']}", json={"title": None})
+        assert response.status_code == 422
+        assert response.headers["content-type"].startswith("application/problem+json")
+
+        body = response.json()
+        assert body["code"] == "VALIDATION_ERROR"
+        assert "title" in body["detail"]
+        assert "null" in body["detail"].lower()
+
+    async def test_explicit_null_on_summary_is_accepted(self, client: AsyncClient) -> None:
+        created = (await client.post("/books", json=BOOK_HOBBIT)).json()
+
+        response = await client.put(f"/books/{created['id']}", json={"summary": None})
+        assert response.status_code == 200
+        assert response.json()["summary"] is None
+
 
 class TestDeleteBook:
     async def test_deletes_book(self, client: AsyncClient) -> None:

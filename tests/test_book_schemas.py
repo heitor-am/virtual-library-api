@@ -71,6 +71,23 @@ class TestBookUpdate:
         with pytest.raises(ValidationError):
             BookUpdate(title="")
 
+    def test_explicit_null_title_is_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="cannot be null"):
+            BookUpdate.model_validate({"title": None})
+
+    def test_explicit_null_author_is_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="cannot be null"):
+            BookUpdate.model_validate({"author": None})
+
+    def test_explicit_null_published_date_is_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="cannot be null"):
+            BookUpdate.model_validate({"published_date": None})
+
+    def test_explicit_null_summary_is_allowed(self) -> None:
+        # summary is the only nullable column — clearing it is legitimate
+        payload = BookUpdate.model_validate({"summary": None})
+        assert payload.summary is None
+
 
 class TestBookRead:
     def test_from_orm_model(self) -> None:

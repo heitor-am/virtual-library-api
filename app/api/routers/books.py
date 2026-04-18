@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Query, status
+from typing import Annotated
+
+from fastapi import APIRouter, Path, Query, status
 
 from app.api.deps import BookServiceDep, DbDep
 from app.repositories.book import SortField, SortOrder
 from app.schemas.book import BookCreate, BookList, BookRead, BookUpdate
 
 router = APIRouter(prefix="/books", tags=["books"])
+
+# SQLite INTEGER maxes out at 2^63-1; cap path params to stay safely below.
+BookId = Annotated[int, Path(ge=1, le=2**63 - 1)]
 
 
 @router.post(
@@ -28,7 +33,7 @@ async def list_books(
     service: BookServiceDep,
     title: str | None = Query(None, description="Case-insensitive partial match on title"),
     author: str | None = Query(None, description="Case-insensitive partial match on author"),
-    skip: int = Query(0, ge=0),
+    skip: int = Query(0, ge=0, le=1_000_000),
     limit: int = Query(20, ge=1, le=100),
     sort_by: SortField = "created_at",
     order: SortOrder = "desc",
@@ -56,7 +61,7 @@ async def list_books(
     summary="Get a book by ID",
     responses={404: {"description": "Book not found"}},
 )
-async def get_book(book_id: int, db: DbDep, service: BookServiceDep) -> BookRead:
+async def get_book(book_id: BookId, db: DbDep, service: BookServiceDep) -> BookRead:
     book = await service.get(db, book_id)
     return BookRead.model_validate(book)
 
@@ -81,5 +86,5 @@ async def update_book(
     summary="Delete a book",
     responses={404: {"description": "Book not found"}},
 )
-async def delete_book(book_id: int, db: DbDep, service: BookServiceDep) -> None:
+async def delete_book(book_id: BookId, db: DbDep, service: BookServiceDep) -> None:
     await service.delete(db, book_id)
