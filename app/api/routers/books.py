@@ -73,7 +73,10 @@ async def get_book(book_id: BookId, db: DbDep, service: BookServiceDep) -> BookR
     responses={404: {"description": "Book not found"}},
 )
 async def update_book(
-    book_id: int, payload: BookUpdate, db: DbDep, service: BookServiceDep
+    book_id: BookId,
+    payload: BookUpdate,
+    db: DbDep,
+    service: BookServiceDep,
 ) -> BookRead:
     data = payload.model_dump(exclude_unset=True)
     book = await service.update(db, book_id, **data)
