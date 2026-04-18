@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from app import __version__
+from app.api.deps import DbDep
 from app.config import get_settings
-from app.database import SessionLocal
 
 router = APIRouter(tags=["health"])
 
@@ -23,13 +23,12 @@ class HealthResponse(BaseModel):
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
+async def health(db: DbDep) -> HealthResponse:
     settings = get_settings()
 
     db_status = "ok"
     try:
-        async with SessionLocal() as session:
-            await session.execute(text("SELECT 1"))
+        await db.execute(text("SELECT 1"))
     except Exception:
         db_status = "error"
 
