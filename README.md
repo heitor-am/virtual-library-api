@@ -8,9 +8,9 @@
 
 > REST API for a virtual library, with **LLM-generated summaries** and **semantic search via embeddings**. FastAPI + OpenRouter + SQLite on Fly.io.
 
-🚀 **Live demo:** https://virtual-library-api.fly.dev
-📚 **Interactive docs (Scalar):** https://virtual-library-api.fly.dev/docs
-❤️ **Health:** https://virtual-library-api.fly.dev/health
+- 🚀 **Live demo:** https://virtual-library-api.fly.dev
+- 📚 **Interactive docs (Scalar):** https://virtual-library-api.fly.dev/docs
+- ❤️ **Health:** https://virtual-library-api.fly.dev/health
 
 ## ✨ Features
 
