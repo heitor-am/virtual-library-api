@@ -28,7 +28,7 @@ async def list_books(
     service: BookServiceDep,
     title: str | None = Query(None, description="Case-insensitive partial match on title"),
     author: str | None = Query(None, description="Case-insensitive partial match on author"),
-    skip: int = Query(0, ge=0),
+    skip: int = Query(0, ge=0, le=1_000_000),
     limit: int = Query(20, ge=1, le=100),
     sort_by: SortField = "created_at",
     order: SortOrder = "desc",

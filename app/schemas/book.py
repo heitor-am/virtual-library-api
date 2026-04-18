@@ -1,6 +1,7 @@
 from datetime import date, datetime
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.book import SummarySource
 
@@ -21,6 +22,13 @@ class BookUpdate(BaseModel):
     author: str | None = Field(default=None, min_length=1, max_length=200)
     published_date: date | None = None
     summary: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def reject_explicit_null_on_required(self) -> Self:
+        for field in ("title", "author", "published_date"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"'{field}' cannot be null; omit the field to skip updating it")
+        return self
 
 
 class BookRead(BookBase):
