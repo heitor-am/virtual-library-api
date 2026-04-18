@@ -5,8 +5,18 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.config import get_settings
 from app.database import Base, get_db
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _deterministic_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Force AI features off by default so tests don't depend on the local .env.
+    # Tests that exercise AI paths opt in by setting their own env + clearing cache.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "")
+    monkeypatch.setenv("AI_FEATURES_ENABLED", "false")
+    get_settings.cache_clear()
 
 
 @pytest.fixture
