@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from scalar_fastapi import get_scalar_api_reference
 
 from app import __version__
-from app.api.routers import health
+from app.api.routers import books, health
 from app.core.exceptions import AppError, app_error_handler, validation_exception_handler
 from app.core.logging import RequestIdMiddleware, configure_logging
 
@@ -36,6 +36,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
 
     app.include_router(health.router)
+    app.include_router(books.router)
 
     @app.get("/", include_in_schema=False)
     async def landing() -> FileResponse:
