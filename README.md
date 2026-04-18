@@ -22,7 +22,7 @@
 - **Scalar** interactive docs instead of the default Swagger UI
 - **Multi-stage Dockerfile** — ~80 MB runtime image
 - **Dev Container** — clone, "Reopen in Container", done
-- **5-job CI**: lint, typecheck, tests (≥ 95% cov), Schemathesis contract tests, `pip-audit` + `bandit` security
+- **5-job CI**: lint, typecheck, tests (≥80% enforced, ~97% actual), Schemathesis contract tests, `pip-audit` + `bandit` security
 
 ## 🏗 Architecture
 
@@ -88,7 +88,7 @@ curl -G "$BASE/books/search/semantic" \
   --data-urlencode "top_k=3"
 ```
 
-Example response from `/books/search/semantic`:
+Example response from `/books/search/semantic` (truncated — the actual `book` object carries the full `BookRead` schema, including `published_date`, `summary_source`, `created_at`, `updated_at`):
 
 ```json
 {
@@ -99,8 +99,11 @@ Example response from `/books/search/semantic`:
         "id": 1,
         "title": "Dom Casmurro",
         "author": "Machado de Assis",
+        "published_date": "1899-01-01",
+        "summary": "\"Dom Casmurro\" é um romance psicológico que narra a vida de Bentinho…",
         "summary_source": "ai",
-        "summary": "\"Dom Casmurro\" é um romance psicológico que narra a vida de Bentinho…"
+        "created_at": "2026-04-18T12:41:17",
+        "updated_at": "2026-04-18T12:41:17"
       },
       "similarity_score": 0.4097
     }
@@ -166,11 +169,11 @@ All non-2xx responses use RFC 7807 `application/problem+json`:
 ```bash
 make check      # lint + typecheck + tests with coverage
 make fmt        # auto-format via ruff
-make migration m="add users table"
+make migration m='describe your change'
 make seed
 ```
 
-CI enforces ≥80% global coverage; the codebase currently sits around 97%.
+CI enforces ≥80% global coverage (`--cov-fail-under=80` in `pyproject.toml`); the codebase currently sits around 97%.
 
 ## 📖 Documentation
 
