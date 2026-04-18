@@ -24,7 +24,10 @@ class BookUpdate(BaseModel):
     summary: str | None = Field(default=None, max_length=2000)
 
     @model_validator(mode="after")
-    def reject_explicit_null_on_required(self) -> Self:
+    def reject_null_on_not_null_columns(self) -> Self:
+        # These columns are NOT NULL at the DB level. Accepting `null` here
+        # would either fail at commit time with a constraint error or silently
+        # confuse clients expecting "omit field = skip update".
         for field in ("title", "author", "published_date"):
             if field in self.model_fields_set and getattr(self, field) is None:
                 raise ValueError(f"'{field}' cannot be null; omit the field to skip updating it")

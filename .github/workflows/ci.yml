@@ -54,9 +54,13 @@ jobs:
           uv run alembic upgrade head
           AI_FEATURES_ENABLED=false uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 &
           for i in {1..20}; do
-            curl -sf http://127.0.0.1:8000/health && break
+            if curl -sf http://127.0.0.1:8000/health; then
+              exit 0
+            fi
             sleep 1
           done
+          echo "API did not become healthy within 20s" >&2
+          exit 1
       - name: Run schemathesis
         run: |
           uv run schemathesis run http://127.0.0.1:8000/openapi.json \
