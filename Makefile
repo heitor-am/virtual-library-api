@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint fmt typecheck check migrate migration docker-build docker-up docker-down deploy clean
+.PHONY: help install dev test lint fmt typecheck check migrate migration seed docker-build docker-up docker-down deploy clean
 
 help:
 	@echo "Available targets:"
@@ -11,6 +11,7 @@ help:
 	@echo "  check        - Run lint + typecheck + test"
 	@echo "  migrate      - Apply Alembic migrations"
 	@echo "  migration    - Create new migration (usage: make migration m='add users')"
+	@echo "  seed         - Populate DB with classic books (requires OPENROUTER_API_KEY)"
 	@echo "  docker-build - Build Docker image"
 	@echo "  docker-up    - Start docker-compose"
 	@echo "  docker-down  - Stop docker-compose"
@@ -44,6 +45,9 @@ migrate:
 
 migration:
 	uv run alembic revision --autogenerate -m "$(m)"
+
+seed:
+	uv run python scripts/seed.py
 
 docker-build:
 	docker build -t virtual-library-api:latest .
