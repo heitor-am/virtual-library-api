@@ -12,7 +12,7 @@ Scalar (`scalar-fastapi`) is a modern OpenAPI renderer built for the current gen
 
 ## Decision
 
-Replace Swagger UI with **Scalar** at `/docs`. ReDoc stays available at `/redoc` as a secondary view for users who prefer it. OpenAPI JSON is served at `/openapi.json` unchanged.
+Replace Swagger UI with **Scalar** at `/docs`. Both `docs_url=None` and `redoc_url=None` are passed to the `FastAPI(...)` constructor so only Scalar is exposed — keeps the surface area narrow and avoids reviewers landing on an older-looking ReDoc page by accident. OpenAPI JSON is served at `/openapi.json` unchanged for anyone who wants to pipe it into a different tool.
 
 Integration is two lines in `app/main.py`:
 
@@ -21,8 +21,6 @@ Integration is two lines in `app/main.py`:
 async def scalar_docs():
     return get_scalar_api_reference(openapi_url="/openapi.json", title=f"{app.title} — Reference")
 ```
-
-And `docs_url=None` in the `FastAPI(...)` constructor to suppress the default Swagger.
 
 ## Consequences
 
