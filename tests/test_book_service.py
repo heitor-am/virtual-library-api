@@ -167,6 +167,103 @@ class TestAutoSummarize:
         mock_repo.create.assert_awaited_once()
 
 
+class TestEmbeddings:
+    @pytest.fixture(autouse=True)
+    def _ai_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+        monkeypatch.setenv("AI_FEATURES_ENABLED", "true")
+        monkeypatch.setenv("OPENROUTER_EMBEDDING_MODEL", "baai/bge-m3")
+        get_settings.cache_clear()
+
+    async def test_create_stores_embedding(
+        self, mock_repo: AsyncMock, db: AsyncMock, sample_book: Book
+    ) -> None:
+        mock_repo.create.return_value = sample_book
+        summary_gen = AsyncMock(return_value="")
+        embedding_gen = AsyncMock(return_value=b"\x00\x01\x02\x03")
+        service = BookService(
+            repo=mock_repo,
+            summary_generator=summary_gen,
+            embedding_generator=embedding_gen,
+        )
+
+        await service.create(
+            db,
+            title="O Hobbit",
+            author="Tolkien",
+            published_date=date(1937, 9, 21),
+            summary="fixed summary",
+        )
+
+        _, kwargs = mock_repo.create.call_args
+        assert kwargs["embedding"] == b"\x00\x01\x02\x03"
+        assert kwargs["embedding_model"] == "baai/bge-m3"
+        embedding_gen.assert_awaited_once()
+
+    async def test_create_still_works_when_embedding_fails(
+        self, mock_repo: AsyncMock, db: AsyncMock, sample_book: Book
+    ) -> None:
+        mock_repo.create.return_value = sample_book
+        embedding_gen = AsyncMock(
+            side_effect=APIConnectionError(request=httpx.Request("POST", "https://openrouter.ai"))
+        )
+        service = BookService(repo=mock_repo, embedding_generator=embedding_gen)
+
+        await service.create(
+            db,
+            title="O Hobbit",
+            author="Tolkien",
+            published_date=date(1937, 9, 21),
+            summary="s",
+        )
+
+        _, kwargs = mock_repo.create.call_args
+        assert "embedding" not in kwargs
+        mock_repo.create.assert_awaited_once()
+
+    async def test_update_regenerates_embedding_when_title_changes(
+        self, mock_repo: AsyncMock, db: AsyncMock, sample_book: Book
+    ) -> None:
+        sample_book.title = "New Title"
+        mock_repo.update.return_value = sample_book
+        embedding_gen = AsyncMock(return_value=b"NEW")
+        service = BookService(repo=mock_repo, embedding_generator=embedding_gen)
+
+        await service.update(db, 1, title="New Title")
+
+        embedding_gen.assert_awaited_once()
+        assert mock_repo.update.await_count == 2
+        second_call_kwargs = mock_repo.update.call_args_list[1].kwargs
+        assert second_call_kwargs["embedding"] == b"NEW"
+        assert second_call_kwargs["embedding_model"] == "baai/bge-m3"
+
+    async def test_update_skips_embedding_when_unrelated_fields_change(
+        self, mock_repo: AsyncMock, db: AsyncMock, sample_book: Book
+    ) -> None:
+        mock_repo.update.return_value = sample_book
+        embedding_gen = AsyncMock()
+        service = BookService(repo=mock_repo, embedding_generator=embedding_gen)
+
+        await service.update(db, 1, published_date=date(2000, 1, 1))
+
+        embedding_gen.assert_not_awaited()
+        assert mock_repo.update.await_count == 1
+
+    async def test_update_succeeds_when_embedding_generator_fails(
+        self, mock_repo: AsyncMock, db: AsyncMock, sample_book: Book
+    ) -> None:
+        mock_repo.update.return_value = sample_book
+        embedding_gen = AsyncMock(
+            side_effect=APIConnectionError(request=httpx.Request("POST", "https://openrouter.ai"))
+        )
+        service = BookService(repo=mock_repo, embedding_generator=embedding_gen)
+
+        result = await service.update(db, 1, summary="new summary")
+
+        assert result is sample_book
+        embedding_gen.assert_awaited_once()
+
+
 class TestGet:
     async def test_returns_book_when_found(
         self,
