@@ -1,306 +1,148 @@
----
-tags:
-  - api
-  - fastapi
-  - arquitetura
-  - planning
-  - documentation
----
-
 # PRD — Virtual Library API
 
-- **Projeto:** Virtual Library API
-- **Status:** Planejamento
+- **Project:** Virtual Library API
+- **Status:** Released (`v1.0.0`)
+- **Live:** https://virtual-library-api.fly.dev
 
----
+## 1. Context
 
-## 1. Contexto e Motivação
+A REST API for a virtual library with AI-assisted features. Books can be created with just title, author, and date — the service auto-generates a summary via LLM and stores a semantic embedding so the same dataset is searchable both by text filters and by semantic similarity.
 
-API REST de biblioteca virtual com busca semântica — projeto de engenharia backend com integração de IA. O objetivo é demonstrar, em um caso de uso realista, um conjunto de práticas modernas:
+The project is part of a three-repo portfolio that shares tooling and conventions; see §13 for the sibling repos.
 
-- FastAPI moderno (Pydantic v2, SQLAlchemy 2.0, async)
-- Arquitetura em camadas com separação de responsabilidades
-- Qualidade de código: lint, type check, cobertura de testes, contract testing
-- Cultura DevOps: CI/CD, multi-stage Docker, deploy automatizado
-- Integração de LLM em contexto CRUD real (resumo automático + busca semântica)
+## 2. Scope
 
-Faz parte de um trio de projetos que compartilham stack e convenções para demonstrar consistência arquitetural — ver seção 14.
+### 2.1 Core requirements
 
----
+- Full CRUD on books (`title`, `author`, `published_date`, `summary`)
+- Text search by title and/or author (case-insensitive, partial match)
+- SQLite persistence
+- Unit and integration tests
+- Documented endpoints
 
-## 2. Objetivo
+### 2.2 Additional requirements (delivered)
 
-Entregar uma **API REST de biblioteca virtual** que permite cadastrar, consultar, atualizar e remover livros, com busca por título e autor, documentação OpenAPI automática, cobertura de testes, pipeline CI e deploy público.
+- Pagination and ordering on list
+- Versioned migrations (Alembic)
+- Test coverage ≥ 80% enforced, actual ~97%
+- 5-job CI (lint, typecheck, tests, contract tests via Schemathesis, security scans via pip-audit + bandit)
+- Public deploy with an accessible URL
+- README with badges, setup, examples
 
-### 2.1 Critérios Core
+### 2.3 Differentiating features
 
-- [x] Cadastro de livros com campos: `title`, `author`, `published_date`, `summary`
-- [x] Consulta de livros por título ou autor
-- [x] Banco SQLite
-- [x] Testes unitários dos endpoints
-- [x] Endpoints bem documentados
+**Documentation & DX:**
+- [Scalar](https://github.com/scalar/scalar) as the interactive docs UI (`/docs`) — replaces the default Swagger
+- Landing page at `/` with pitch and links
+- Mermaid diagrams (architecture + request flow) rendered inline in the README
+- Architecture Decision Records in [`docs/adr/`](adr/)
+- Dev Container for zero-setup onboarding
+- Structured logging with `request_id` propagation (`structlog`)
 
-### 2.2 Critérios Adicionais
+**AI layer:**
+- **OpenRouter** as unified LLM gateway — both chat and embeddings behind one provider, model selectable via env vars
+- **Auto-summary** on create when the client omits `summary` — `openai/gpt-4o-mini`, `summary_source="ai"` tracked
+- **Semantic search** at `/books/search/semantic` using multilingual `baai/bge-m3` embeddings (1024 dims, 8192-token context) persisted as SQLite BLOBs
+- AI is strictly additive: `LLMUnavailableError` / `openai.APIError` caught in the service, so LLM outages never block CRUD writes
 
-- [x] CRUD completo (POST, GET, GET por id, PUT, DELETE)
-- [x] Paginação e ordenação nas listagens
-- [x] Busca case-insensitive com correspondência parcial
-- [x] Migrations versionadas (Alembic)
-- [x] Cobertura de testes ≥ 90%
-- [x] CI no GitHub Actions (lint + type check + testes + contract tests)
-- [x] Deploy público com URL acessível
-- [x] README com setup, exemplos e badges
-
-### 2.3 Diferenciais (wow factor)
-
-Recursos pensados para destacar o projeto como peça de portfólio acima da média:
-
-**Documentação e DX:**
-- [x] **Scalar** como UI de documentação (substitui Swagger default) — visual moderno
-- [x] **Landing page** em `/` com pitch do projeto e links para docs
-- [x] **Mermaid diagrams** no README (arquitetura + fluxo de request) renderizados pelo GitHub
-- [x] **ADRs** (Architecture Decision Records) em `docs/adr/` documentando o *porquê* de cada escolha
-- [x] **Dev Container** — clone e "Reopen in Container" no VSCode, ambiente pronto
-- [x] **Postman Collection** versionada em `docs/collection.json`
-
-**AI features:**
-- [x] **OpenRouter como gateway unificado** — chat e embeddings no mesmo provider, zero vendor lock-in, swap de modelo via env var
-- [x] **Resumo automático via LLM** — se `summary` vier vazio no POST, a API gera via OpenRouter (`openai/gpt-4o-mini`)
-- [x] **Busca semântica multilíngue** — endpoint `/books/search/semantic` usando embeddings `baai/bge-m3` (SOTA open-source multilíngue, 1024 dims, context 8192)
-- [x] **Embeddings armazenados no SQLite** (BLOB) e recalculados em updates
-- [x] **Integração consistente entre repos** — mesma `AI Layer`, mesmo padrão de client reutilizado nos demais projetos do portfólio
-
-**Qualidade de código:**
-- [x] **Pre-commit hooks** (ruff, mypy, pytest rápido)
-- [x] **Conventional Commits** + **CHANGELOG automático** via release-please
-- [x] **Schemathesis** — testes de contrato gerados a partir do OpenAPI spec
-- [x] **RFC 7807 Problem Details** — formato padrão de erros HTTP
-- [x] **Structured logging** (structlog) com `request_id` em todas as camadas
+**Quality:**
+- Pre-commit hooks (ruff, mypy, pytest)
+- Conventional Commits
+- Schemathesis contract tests in CI against the running API
+- **RFC 7807 Problem Details** for every error response (`application/problem+json`)
 
 **DevOps:**
-- [x] **Multi-stage Dockerfile** (~80 MB final vs ~500 MB single-stage)
-- [x] **Makefile** com comandos comuns (`make dev`, `make test`, `make deploy`)
-- [x] **Dependabot** para updates automáticos de dependências
-- [x] **Healthcheck rico** — retorna versão, commit SHA, uptime, status do DB
+- Multi-stage Dockerfile — ~74 MB runtime image
+- Makefile with canonical commands (`make check`, `make dev`, `make deploy`)
+- Dependabot for automated dependency bumps
+- Rich `/health` endpoint (`version`, `commit` SHA, `uptime_seconds`, DB status)
+- Deployed on Fly.io with auto-deploy on push to `main`
 
----
+### 2.4 Out of scope
 
-## 3. Escopo
+- Authentication / authorization
+- File uploads
+- Relations to other entities
+- Rate limiting (relies on OpenRouter's prepaid spend cap)
+- Advanced observability (metrics, tracing)
 
-### 3.1 Dentro do Escopo
+## 3. Stack
 
-| Funcionalidade | Detalhe |
-|---|---|
-| Cadastrar livro | `POST /books` com validação de campos |
-| Listar livros | `GET /books` com filtros (`?title=`, `?author=`), paginação (`?skip=`, `?limit=`) e ordenação (`?sort_by=`) |
-| Buscar livro por ID | `GET /books/{id}` |
-| Atualizar livro | `PUT /books/{id}` |
-| Remover livro | `DELETE /books/{id}` |
-| Health check | `GET /health` para monitoramento/deploy |
-| Documentação automática | `GET /docs` (Swagger) e `GET /redoc` |
-
-### 3.2 Fora do Escopo
-
-- Autenticação/autorização (JWT, OAuth) — fora do escopo atual, manter simples
-- Upload de arquivos/capas de livros
-- Relações com outras entidades (empréstimos, usuários, reservas)
-- Rate limiting e caching
-- Observabilidade avançada (métricas, tracing) — log estruturado é suficiente
-
----
-
-## 4. Requisitos Não-Funcionais
-
-| Requisito | Alvo | Justificativa |
+| Layer | Choice | Rationale (see ADRs) |
 |---|---|---|
-| Latência média | < 100 ms (p95) | Operações CRUD simples em SQLite local |
-| Cobertura de testes | ≥ 90% | Padrão de qualidade profissional |
-| Startup cold | < 3 s | Deploy ágil e testes rápidos |
-| Documentação | 100% dos endpoints | Acessibilidade via `/docs` |
-| Reprodutibilidade | `docker compose up` roda tudo | Onboarding em 1 comando |
+| Web framework | FastAPI | [ADR-001](adr/001-fastapi-over-django.md) |
+| Package manager | uv | [ADR-002](adr/002-uv-package-manager.md) |
+| Deployment | Fly.io | [ADR-003](adr/003-fly-io-deployment.md) |
+| LLM gateway | OpenRouter (`openai` SDK + custom `base_url`) | [ADR-004](adr/004-openrouter-unified-llm-gateway.md) |
+| Docs UI | Scalar | [ADR-005](adr/005-scalar-over-swagger.md) |
+| Error format | RFC 7807 Problem Details | [ADR-006](adr/006-rfc-7807-errors.md) |
+| Embedding model | `baai/bge-m3` | [ADR-007](adr/007-bge-m3-for-multilingual-embeddings.md) |
+| ORM | SQLAlchemy 2.0 (async) | Modern typed API; async fits FastAPI |
+| Validation | Pydantic v2 | Integrated with FastAPI; `pydantic-settings` for env vars |
+| Migrations | Alembic (autogenerate) | Industry standard for SQLAlchemy |
+| Testing | pytest + httpx AsyncClient + Schemathesis | Fixtures, async-native, contract testing |
+| Lint / format | Ruff | Replaces Black + Flake8 + isort in one tool |
+| Type check | mypy (strict) | Mature, wide ecosystem support |
 
----
+## 4. Architecture
 
-## 5. Stack Tecnológica
-
-### 5.1 Tabela de Decisões
-
-| Camada | Escolha | Alternativa | Justificativa |
-|---|---|---|---|
-| Framework web | **FastAPI** | Django+DRF, Flask | Async nativo, docs automáticas (OpenAPI), Pydantic integrado, performance superior, padrão de mercado para APIs de IA |
-| Docs UI | **Scalar** | Swagger UI default, ReDoc | UI moderna, temas customizáveis, melhor DX para quem consome a API — diferencial visível |
-| Validação | **Pydantic v2** | Marshmallow | Integrado ao FastAPI, validação declarativa, serialização rápida (Rust bindings) |
-| ORM | **SQLAlchemy 2.0** | Tortoise, Peewee | Maduro, padrão de facto em Python, suporte async, type-safe API nova (`Mapped`, `mapped_column`) |
-| Banco | **SQLite** | PostgreSQL | Suficiente para o escopo; arquivo único facilita deploy; demonstra domínio sem overhead de serviço externo |
-| Migrations | **Alembic** | — | Padrão do SQLAlchemy, versionamento do schema, melhor prática mesmo em SQLite |
-| Testes unitários | **pytest + httpx.AsyncClient** | unittest | Fixtures poderosas, sintaxe limpa, `AsyncClient` testa app async sem subir servidor |
-| Testes de contrato | **Schemathesis** | — | Gera casos automaticamente a partir do OpenAPI spec; pega drift entre código e docs |
-| LLM gateway | **OpenRouter** | OpenAI direto, Anthropic direto | Um provider para chat + embeddings; swap de modelo por env var; billing único; failover nativo. Usa o mesmo SDK `openai` (API compatível) |
-| Chat model | **`openai/gpt-4o-mini`** (via OpenRouter) | Claude Haiku, Llama 3.1 | Custo-benefício para geração de resumos curtos (~$0.001 por call) |
-| Embedding model | **`baai/bge-m3`** (via OpenRouter) | `text-embedding-3-small`, `multilingual-e5-large` | SOTA multilíngue open-source, 1024 dims, context 8192, $0.01/M tokens (2x mais barato que OpenAI) |
-| Cálculo de similaridade | **numpy cosine (linear scan)** | FAISS, pgvector | Simples, 5ms para <10k livros. ADR documenta migração futura |
-| Erro HTTP | **RFC 7807 Problem Details** | JSON ad-hoc | Padrão RFC, `application/problem+json`, consistência entre endpoints |
-| Gerenciador de dep. | **uv** | Poetry, pip+venv | 10-100× mais rápido, lockfile determinístico, feito em Rust, padrão emergente |
-| Lint + format | **Ruff** | Black + Flake8 + isort | Substitui 3 ferramentas em 1, feito em Rust, config única |
-| Type check | **mypy** | pyright | Padrão da comunidade, boa integração CI |
-| Pre-commit | **pre-commit** | husky, lefthook | Padrão Python, hooks rodam local antes do commit |
-| Convenção de commits | **Conventional Commits + release-please** | commitizen | `feat:`, `fix:` geram CHANGELOG e releases automáticos |
-| Container | **Docker (multi-stage)** | — | Build cacheado, imagem final slim (~80 MB) |
-| Dev env | **Dev Container** | setup manual | Clone + "Reopen in Container" → tudo pronto. Funciona no GitHub Codespaces |
-| CI | **GitHub Actions** | GitLab CI, Circle | Gratuito para repos públicos, integração nativa com GitHub |
-| Deploy | **Fly.io** | Railway, Render | Free tier generoso, suporte nativo a volumes persistentes (essencial p/ SQLite), deploy via `flyctl` |
-| Logs | **structlog** | logging puro | Logs estruturados (JSON) com `request_id` propagado, melhor observabilidade |
-| Deps security | **Dependabot + pip-audit** | Snyk, Safety | Grátis, integra nativo no GitHub, auto-PRs |
-
-### 5.2 Versões-alvo
-
-```
-Python 3.12
-FastAPI >= 0.115
-SQLAlchemy >= 2.0
-Pydantic >= 2.9
-Alembic >= 1.13
-pytest >= 8.0
-scalar-fastapi >= 1.0
-openai >= 1.50          # SDK usado com base_url do OpenRouter
-numpy >= 1.26           # cosine similarity
-schemathesis >= 3.30
-structlog >= 24.0
-tenacity >= 9.0         # retry com backoff nas chamadas OpenRouter
-```
-
----
-
-## 6. Arquitetura
-
-### 6.1 Princípios
-
-1. **Separação de responsabilidades** — rotas não falam com DB direto, passam por service/repository
-2. **Dependency Injection via FastAPI** — sessão de DB, configurações, serviços injetados
-3. **Schemas vs Models** — Pydantic (entrada/saída HTTP) separado de SQLAlchemy (persistência)
-4. **Configuração via env vars** — `pydantic-settings` com `.env` para dev
-
-### 6.2 Camadas
+Layered: `routers → services → repositories → database`, with a parallel `app/ai/` module for LLM/embedding integration.
 
 ```
 ┌─────────────────────────────────────┐
-│  API Layer (FastAPI Routers)        │  ← HTTP, validação de entrada, docs
+│  API Layer (FastAPI routers)        │  HTTP, validation, docs
 ├─────────────────────────────────────┤
-│  Service Layer (lógica de negócio)  │  ← Regras, orquestração
+│  Service Layer                      │  business logic, RFC 7807 exceptions
 ├─────────────────────────────────────┤
-│  Repository Layer (acesso a dados)  │  ← CRUD SQLAlchemy
+│  Repository Layer                   │  SQLAlchemy CRUD, filters
 ├─────────────────────────────────────┤
-│  AI Layer (OpenRouter integration)  │  ← Resumo e embeddings (chat + embed)
+│  AI Layer (OpenRouter)              │  summary + embeddings, retry + graceful fail
 ├─────────────────────────────────────┤
 │  Database (SQLite)                  │
 └─────────────────────────────────────┘
 ```
 
-Para o escopo atual (CRUD simples), `Service` e `Repository` são quase triviais — mas a separação mostra conhecimento arquitetural e prepara o código para crescer. A **AI Layer** é um módulo separado (`app/ai/`) que encapsula o cliente **OpenRouter** (SDK `openai` com `base_url` customizado), isolando prompts, configuração de modelos e lógica de embeddings do resto do código. A mesma estrutura de `app/ai/` será replicada nos repos Q2 e Q3 — padrão compartilhado entre os três projetos.
+**Principles:**
 
-### 6.3 Fluxo de uma Request
+- Routes don't touch SQLAlchemy — they pass through the service
+- Services inject dependencies (repo, AI generators) so tests can mock freely
+- Repositories are the only place SQLAlchemy lives
+- AI failures are swallowed on write paths, surfaced as `503 application/problem+json` on search paths
 
-```
-Client → Router → Pydantic validation → Service → Repository → SQLAlchemy → SQLite
-                                                                                  ↓
-Client ← JSON response ← Pydantic serialization ← Service ← Repository ← SQLAlchemy
-```
+See the Mermaid rendering in the [README](../README.md) and the detailed [request flow diagram](diagrams/request-flow.md).
 
----
+## 5. Data model
 
-## 7. Modelo de Dados
+Single entity: `Book`
 
-### 7.1 Entidade `Book`
+| Field | Type | Notes |
+|---|---|---|
+| `id` | int, PK | autoincrement |
+| `title` | str | NOT NULL, indexed |
+| `author` | str | NOT NULL, indexed |
+| `published_date` | date | NOT NULL |
+| `summary` | str \| null | nullable — the only field that can be cleared on PUT |
+| `summary_source` | enum (`user` \| `ai`) | provenance of the summary |
+| `embedding` | BLOB \| null | `bge-m3` float32 vector (4096 bytes) |
+| `embedding_model` | str \| null | model identifier, used to invalidate if model changes |
+| `created_at` | datetime | `CURRENT_TIMESTAMP` default |
+| `updated_at` | datetime | auto-updated on modify |
 
-| Campo | Tipo | Constraints | Descrição |
-|---|---|---|---|
-| `id` | `int` | PK, autoincrement | Identificador único |
-| `title` | `str` | NOT NULL, index | Título do livro |
-| `author` | `str` | NOT NULL, index | Autor principal |
-| `published_date` | `date` | NOT NULL | Data de publicação |
-| `summary` | `str` | NULL | Resumo/sinopse (auto-gerado via LLM se vazio) |
-| `summary_source` | `enum('user', 'ai')` | NOT NULL default 'user' | Origem do resumo — transparência |
-| `embedding` | `bytes` (BLOB) | NULL | Vetor float32 serializado (1024 dims para `baai/bge-m3`) |
-| `embedding_model` | `str` | NULL | Modelo usado (ex: `baai/bge-m3`) — permite invalidação/rebuild ao trocar modelo |
-| `created_at` | `datetime` | NOT NULL, default now | Timestamp de criação |
-| `updated_at` | `datetime` | NOT NULL, auto-update | Última modificação |
+Indexes on `title` and `author` power the text filters. Embeddings are recomputed on any update that touches `title`, `author`, or `summary`.
 
-Índices em `title` e `author` otimizam as buscas textuais. O `embedding` é recalculado sempre que `title`, `author` ou `summary` mudam. Em bancos com até alguns milhares de livros, a busca por cosine similarity é feita em Python com numpy (linear, ~5ms) — escala bem para o escopo.
+## 6. API
 
-### 7.2 Schemas Pydantic
+| Method | Path | Status codes |
+|---|---|---|
+| `POST` | `/books` | 201 / 422 |
+| `GET` | `/books` | 200 (with `?title`, `?author`, `?skip`, `?limit`, `?sort_by`, `?order`) |
+| `GET` | `/books/{id}` | 200 / 404 / 422 |
+| `PUT` | `/books/{id}` | 200 / 404 / 422 |
+| `DELETE` | `/books/{id}` | 204 / 404 / 422 |
+| `GET` | `/books/search/semantic` | 200 / 422 / 503 (`?q`, `?top_k`, `?min_score`) |
+| `GET` | `/health` | 200 / 503 |
 
-- `BookBase` — campos comuns
-- `BookCreate` — entrada para POST (sem `id`, `created_at`, `updated_at`)
-- `BookUpdate` — entrada para PUT (todos os campos opcionais)
-- `BookRead` — saída para GET (inclui `id` e timestamps)
-- `BookList` — envelope de listagem com `items`, `total`, `skip`, `limit`
-
----
-
-## 8. API Design
-
-### 8.1 Endpoints
-
-| Método | Rota | Descrição | Status de Sucesso |
-|---|---|---|---|
-| `POST` | `/books` | Cadastrar livro (auto-gera resumo e embedding) | 201 Created |
-| `GET` | `/books` | Listar livros (com filtros textuais) | 200 OK |
-| `GET` | `/books/{id}` | Buscar por ID | 200 OK / 404 |
-| `PUT` | `/books/{id}` | Atualizar livro | 200 OK / 404 |
-| `DELETE` | `/books/{id}` | Remover livro | 204 No Content / 404 |
-| `GET` | `/books/search/semantic` | Busca por similaridade semântica | 200 OK |
-| `POST` | `/books/{id}/summary/regenerate` | Regenerar resumo via LLM | 200 OK / 404 |
-| `GET` | `/health` | Health check (DB, versão, uptime, commit SHA) | 200 OK / 503 |
-| `GET` | `/` | Landing page (HTML estático com pitch + links) | 200 OK |
-| `GET` | `/docs` | Scalar UI (docs interativa) | 200 OK |
-| `GET` | `/openapi.json` | OpenAPI spec | 200 OK |
-
-### 8.2 Query Params em `GET /books`
-
-- `title` (str, opcional) — filtro case-insensitive, match parcial
-- `author` (str, opcional) — filtro case-insensitive, match parcial
-- `skip` (int, default 0) — paginação
-- `limit` (int, default 20, max 100) — paginação
-- `sort_by` (enum, default `created_at`) — `title`, `author`, `published_date`, `created_at`
-- `order` (enum, default `desc`) — `asc`, `desc`
-
-### 8.2.1 Query Params em `GET /books/search/semantic`
-
-- `q` (str, obrigatório) — texto livre ("aventura na Terra Média", "livros sobre stoicismo")
-- `top_k` (int, default 5, max 20) — quantos resultados retornar
-- `min_score` (float, default 0.0) — filtro mínimo de similaridade (0-1)
-
-Retorno inclui campo `similarity_score` em cada item.
-
-### 8.3 Exemplo de Payload
-
-**Request:**
-```json
-POST /books
-{
-  "title": "O Hobbit",
-  "author": "J.R.R. Tolkien",
-  "published_date": "1937-09-21",
-  "summary": "Bilbo Bolseiro embarca em uma aventura..."
-}
-```
-
-**Response 201:**
-```json
-{
-  "id": 1,
-  "title": "O Hobbit",
-  "author": "J.R.R. Tolkien",
-  "published_date": "1937-09-21",
-  "summary": "Bilbo Bolseiro embarca em uma aventura...",
-  "created_at": "2026-04-18T14:30:00Z",
-  "updated_at": "2026-04-18T14:30:00Z"
-}
-```
-
-### 8.4 Tratamento de Erros — RFC 7807 Problem Details
-
-Formato padrão RFC 7807 (`Content-Type: application/problem+json`):
+All errors follow RFC 7807:
 
 ```json
 {
@@ -313,353 +155,90 @@ Formato padrão RFC 7807 (`Content-Type: application/problem+json`):
 }
 ```
 
-Campos:
-- `type` — URI identificando o tipo do erro (ponte para docs futura)
-- `title` — resumo curto legível
-- `status` — código HTTP
-- `detail` — explicação específica do caso
-- `instance` — caminho da request que causou
-- `code` — código interno da aplicação (machine-readable)
+Full interactive reference at [`/docs`](https://virtual-library-api.fly.dev/docs).
 
-Códigos HTTP usados: `200`, `201`, `204`, `400`, `404`, `422`, `500`, `503`.
+## 7. Testing strategy
 
-Erros tratados: `BOOK_NOT_FOUND`, `VALIDATION_ERROR`, `LLM_UNAVAILABLE`, `DB_UNAVAILABLE`.
+- **Unit** — repository and service tested in isolation (in-memory SQLite for repo, mocked repo + AI generators for service)
+- **Integration** — endpoints tested via `httpx.AsyncClient` with `dependency_overrides` injecting the test DB and stubbed service
+- **Contract** — Schemathesis fuzzes the live API from the OpenAPI spec in CI (`--checks not_a_server_error`). Caught three production bugs during development: `PUT /books/{id}` with `{"title": null}` returning 500 on a NOT NULL constraint; `GET /books?skip=<huge>` overflowing SQLite INTEGER; same overflow on path params `GET /books/{huge_id}`. All fixed.
+- **Security** — `pip-audit` for CVEs in installed packages, `bandit -r app/` for code-level scans. Both zero-findings.
 
----
+Coverage gate: `--cov-fail-under=80`. Current actual ~97%.
 
-## 9. Estrutura de Pastas
+## 8. CI/CD
+
+Five GitHub Actions jobs on every push and PR:
+
+| Job | Tool |
+|---|---|
+| `lint` | `ruff check` + `ruff format --check` |
+| `typecheck` | `mypy app` (strict) |
+| `test` | `pytest` with coverage |
+| `contract` | Boots the API with `AI_FEATURES_ENABLED=false`, runs Schemathesis |
+| `security` | `pip-audit` + `bandit` |
+
+Auto-deploy on push to `main` via `superfly/flyctl-actions` with the commit SHA injected as a build arg (so `/health` reports the exact version running).
+
+GitHub Copilot code review is enabled on the default branch; reviews against custom instructions in [`.github/copilot-instructions.md`](../.github/copilot-instructions.md).
+
+## 9. Deployment
+
+- **Fly.io**, region `gru` (São Paulo)
+- 512 MB shared-cpu-1x machine, auto-stop on idle
+- 1 GB persistent volume at `/data` — the SQLite file lives there
+- Healthcheck polls `/health` every 30s
+- Secrets: `OPENROUTER_API_KEY`; GitHub: `FLY_API_TOKEN` (deploy-scoped, 1-year expiry)
+
+Migrations run on container startup (`alembic upgrade head && exec uvicorn ...`) — release commands on Fly run on a machine without the volume mount, so the approach of in-container migrations avoids a known pitfall.
+
+## 10. Folder structure
 
 ```
 virtual-library-api/
 ├── app/
-│   ├── __init__.py
-│   ├── main.py                  # entry FastAPI, Scalar, middlewares, landing page
-│   ├── config.py                # pydantic-settings (env vars)
-│   ├── database.py              # engine, SessionLocal, get_db dependency
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── deps.py              # dependências compartilhadas (get_db, etc.)
-│   │   └── routers/
-│   │       ├── __init__.py
-│   │       ├── books.py         # endpoints /books (CRUD + filtros)
-│   │       ├── search.py        # endpoint /books/search/semantic
-│   │       └── health.py        # endpoint /health
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── book.py              # SQLAlchemy Book model
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── book.py              # Pydantic schemas de Book
-│   │   └── problem.py           # Problem Details (RFC 7807)
-│   ├── repositories/
-│   │   ├── __init__.py
-│   │   └── book.py              # CRUD operations
-│   ├── services/
-│   │   ├── __init__.py
-│   │   └── book.py              # lógica de negócio (orquestra AI + Repo)
-│   ├── ai/
-│   │   ├── __init__.py
-│   │   ├── client.py            # wrapper OpenRouter (OpenAI SDK + base_url + retry)
-│   │   ├── summary.py           # geração de resumo (prompt + parsing)
-│   │   ├── embeddings.py        # gerar embedding (bge-m3) + cosine similarity
-│   │   └── prompts.py           # prompts versionados
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── exceptions.py        # exceptions customizadas + handlers RFC 7807
-│   │   ├── logging.py           # config do structlog + request_id middleware
-│   │   └── version.py           # lê versão do pyproject.toml + git SHA
-│   └── static/
-│       └── index.html           # landing page
-├── alembic/
-│   ├── env.py
-│   ├── script.py.mako
-│   └── versions/
-│       └── xxxx_initial.py
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py              # fixtures (test client, test db, mock OpenRouter)
-│   ├── test_books_api.py        # testes dos endpoints CRUD
-│   ├── test_books_repository.py # testes unitários do repository
-│   ├── test_semantic_search.py  # testes de busca semântica (mock embeddings)
-│   ├── test_ai_integration.py   # testes dos wrappers OpenRouter
-│   ├── test_problem_details.py  # validar formato de erros
-│   └── test_health.py
+│   ├── main.py, config.py, database.py
+│   ├── api/deps.py + api/routers/{books,search,health}.py
+│   ├── models/book.py                  # SQLAlchemy
+│   ├── schemas/{book,problem}.py       # Pydantic (HTTP contracts)
+│   ├── repositories/book.py            # SQLAlchemy queries
+│   ├── services/book.py                # orchestration + injected AI generators
+│   ├── ai/{client,summary,embeddings,prompts}.py
+│   ├── core/{exceptions,logging}.py    # RFC 7807 + structlog
+│   └── static/index.html               # landing page
+├── alembic/                            # migrations
+├── tests/                              # parallels app/
 ├── docs/
-│   ├── adr/
-│   │   ├── template.md
-│   │   ├── 001-fastapi-over-django.md
-│   │   ├── 002-uv-package-manager.md
-│   │   ├── 003-fly-io-deployment.md
-│   │   ├── 004-openrouter-unified-llm-gateway.md
-│   │   ├── 005-scalar-over-swagger.md
-│   │   ├── 006-rfc-7807-errors.md
-│   │   └── 007-bge-m3-for-multilingual-embeddings.md
-│   ├── diagrams/
-│   │   ├── architecture.md      # mermaid: camadas
-│   │   └── request-flow.md      # mermaid: fluxo de uma request
-│   └── collection.json          # Postman collection
-├── .devcontainer/
-│   ├── devcontainer.json        # config VSCode Dev Container
-│   └── post-create.sh           # comandos após criar container
-├── .github/
-│   ├── workflows/
-│   │   ├── ci.yml               # lint + typecheck + tests + schemathesis
-│   │   ├── deploy.yml           # deploy Fly.io em push para main
-│   │   └── release.yml          # release-please (CHANGELOG + tags)
-│   └── dependabot.yml           # auto-updates de deps
-├── .pre-commit-config.yaml      # hooks: ruff, mypy, pytest (rápido)
-├── .dockerignore
-├── .gitignore
-├── .env.example
-├── Dockerfile                   # multi-stage (builder + runtime ~80 MB)
-├── docker-compose.yml           # dev local
-├── fly.toml                     # config do Fly.io
-├── alembic.ini
-├── pyproject.toml               # config do uv, ruff, mypy, pytest
-├── uv.lock
-├── Makefile                     # make dev, test, deploy, fmt, lint
-├── CHANGELOG.md                 # gerado por release-please
-├── README.md                    # badges, demo GIF, curl examples, mermaid
-└── PRD.md                       # cópia deste documento
+│   ├── PRD.md                          # this document
+│   ├── adr/                            # 7 ADRs
+│   └── diagrams/                       # Mermaid architecture + request flow
+├── .github/                            # CI + CD + dependabot + copilot-instructions
+├── .devcontainer/                      # zero-setup VS Code
+├── Dockerfile, docker-compose.yml, fly.toml
+├── pyproject.toml, uv.lock, Makefile
+└── README.md, LICENSE
 ```
 
-### 9.1 Justificativas da Estrutura
+## 11. Release history
 
-- **`app/`** como package raiz: padrão FastAPI, permite imports absolutos limpos (`from app.models import Book`)
-- **Separação `models/` `schemas/` `repositories/` `services/`**: cada camada é uma pasta, não um arquivo único inchado. Escala bem ao adicionar mais entidades (usuários, empréstimos)
-- **`app/ai/`** isolado: prompts, clients e lógica de LLM em um único lugar. OpenRouter como gateway já permite trocar de modelo por env var; a camada adiciona abstração extra caso queira migrar de gateway no futuro
-- **`api/routers/`** em subpasta: permite agrupar routers por domínio; `main.py` fica enxuto
-- **`core/`** para cross-cutting concerns: exceptions, logging, versionamento, futuramente auth/cache
-- **`docs/adr/`**: Architecture Decision Records numerados e imutáveis. Cada escolha importante vira um ADR com Contexto → Decisão → Consequências
-- **`docs/diagrams/`**: Mermaid renderizado pelo GitHub direto no preview
-- **`.devcontainer/`**: onboarding sem fricção — clone + Reopen in Container = pronto
-- **`tests/` paralelo a `app/`**: padrão pytest, não polui o código de produção
+- **v0.1.0** — MVP: CRUD + filters + tests + migrations
+- **v0.2.0** — AI features: auto-summary + embeddings + semantic search
+- **v1.0.0** — Production: deploy, CI/CD, ADRs, Mermaid diagrams, polished README
 
----
+## 12. Risks and mitigations
 
-## 10. Estratégia de Testes
-
-### 10.1 Pirâmide
-
-| Nível | Ferramenta | Cobertura |
-|---|---|---|
-| Unit (repository, service, ai) | pytest puro | ~45% dos testes |
-| Integration (API endpoints) | pytest + httpx.AsyncClient | ~45% dos testes |
-| Contract (OpenAPI compliance) | Schemathesis | ~10% dos testes |
-| E2E (opcional) | — | 0 |
-
-### 10.2 Casos-chave
-
-- **Criar livro**: sucesso, validação de campos obrigatórios, data inválida
-- **Listar livros**: sem filtro, com `title`, com `author`, com ambos, paginação, ordenação
-- **Buscar por ID**: sucesso, 404
-- **Atualizar**: sucesso, 404, atualização parcial
-- **Remover**: sucesso, 404
-- **Health check**: retorna 200 com status ok
-
-### 10.3 Infraestrutura de Teste
-
-- **Test DB isolado**: SQLite em memória (`sqlite:///:memory:`) para cada sessão de teste
-- **Fixtures**: `client` (httpx AsyncClient), `db_session` (transação revertida), `sample_book`, `mock_openrouter` (stub do client para não gastar créditos em testes)
-- **Coverage**: `pytest-cov` com fail-under 90%
-- **Schemathesis**: roda no CI contra a app local; gera requests aleatórias a partir do OpenAPI, valida responses contra o schema — pega divergências entre código e docs automaticamente
-
----
-
-## 11. CI/CD
-
-### 11.1 Pipeline CI (`.github/workflows/ci.yml`)
-
-Triggers: push e PR em qualquer branch.
-
-Jobs (em paralelo onde possível):
-
-1. **lint**: `ruff check .` + `ruff format --check .`
-2. **typecheck**: `mypy app/`
-3. **test**: `pytest --cov=app --cov-fail-under=90`
-4. **contract**: sobe app e roda `schemathesis run http://localhost:8000/openapi.json --checks all`
-5. **security**: `pip-audit` (deps vulneráveis) + `bandit -r app/` (código)
-
-Matrix: Python 3.12 (poderia testar 3.11 e 3.13 como stretch).
-
-Cache do `uv` para builds rápidos (~30s).
-
-### 11.2 Pre-commit hooks (`.pre-commit-config.yaml`)
-
-Rodam localmente antes de cada commit — evitam CI quebrado:
-
-- `ruff check --fix` e `ruff format`
-- `mypy` nos arquivos alterados
-- `pytest -x --ff` (falha rápida, só arquivos modificados)
-- Validador de Conventional Commits (`commitlint`)
-
-### 11.3 Release automation (`.github/workflows/release.yml`)
-
-- **release-please** detecta `feat:`/`fix:` nos commits, abre PR com CHANGELOG gerado
-- Merge do PR cria tag + release no GitHub automaticamente
-
-### 11.4 Pipeline CD (`.github/workflows/deploy.yml`)
-
-Trigger: push em `main` com CI verde.
-
-Steps:
-1. Checkout
-2. Setup `flyctl`
-3. `flyctl deploy --remote-only` (injeta commit SHA como build arg para o `/health`)
-
-Secrets: `FLY_API_TOKEN`, `OPENROUTER_API_KEY` (como `flyctl secrets set`).
-
-### 11.5 Badges no README
-
-- Status do CI
-- Cobertura de testes (Codecov ou shields.io)
-- Versão do Python
-- Última release (via release-please)
-- License (MIT)
-- Deployed on Fly.io
-
----
-
-## 12. Deploy
-
-### 12.1 Plataforma: Fly.io
-
-**Por quê Fly.io:**
-- Free tier: 3 máquinas pequenas + 3GB de volume — suficiente
-- **Volume persistente nativo**: crítico para SQLite (o arquivo `.db` precisa sobreviver entre deploys)
-- Deploy via `flyctl deploy` é rápido (~1min)
-- TLS automático, subdomínio `*.fly.dev` grátis
-- Integra bem com GitHub Actions
-
-**Alternativas consideradas:**
-- **Railway**: mais caro, bom UX mas sem free tier eterno
-- **Render**: free tier tem cold start agressivo
-- **Heroku**: sem free tier
-- **Vercel/Netlify**: não suportam Python server-side com volume
-
-### 12.2 Configuração (`fly.toml`)
-
-- Região: `gru` (São Paulo) — menor latência
-- Memória: 256 MB (suficiente)
-- Volume mount: `/data` — arquivo SQLite vive ali
-- Healthcheck: `GET /health` a cada 30s
-
-### 12.3 Variáveis de Ambiente (produção)
-
-| Var | Valor |
+| Risk | Mitigation |
 |---|---|
-| `DATABASE_URL` | `sqlite:////data/library.db` |
-| `LOG_LEVEL` | `INFO` |
-| `ENVIRONMENT` | `production` |
-| `OPENROUTER_API_KEY` | (secret) — única chave necessária para chat e embeddings |
-| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` |
-| `OPENROUTER_CHAT_MODEL` | `openai/gpt-4o-mini` — trocável sem redeploy |
-| `OPENROUTER_EMBEDDING_MODEL` | `baai/bge-m3` — trocável sem redeploy |
-| `OPENROUTER_APP_URL` | `https://virtual-library-api.fly.dev` — aparece no dashboard do OpenRouter |
-| `OPENROUTER_APP_NAME` | `Virtual Library API` — header `X-Title` |
-| `AI_FEATURES_ENABLED` | `true` — flag para desabilitar graciosamente se quota acabar |
-| `GIT_SHA` | injetado no build via `flyctl deploy --build-arg GIT_SHA=$(git rev-parse HEAD)` |
+| OpenRouter outage | `tenacity` retry (3 attempts, exponential backoff) + graceful degradation (write paths succeed without AI) |
+| Runaway OpenRouter cost | Prepaid credit model — you can only spend what you funded |
+| SQLite single-file lock under write pressure | Acceptable at this scale; volume provides durability |
+| Deploy-time migration failures | Migrations run in-container with the volume mounted, so errors surface in logs and the old machine stays live until the new one is healthy |
+| Schemathesis flaky in CI | Pinned `--hypothesis-max-examples=10` keeps the state space bounded |
 
----
+## 13. Portfolio companions
 
-## 13. Roadmap
+This repo is one of three sibling projects sharing the same tooling and `app/ai/` pattern:
 
-Dividido em duas fases de ~7h cada. Fase 1 pode ser entregue standalone (MVP funcional); Fase 2 adiciona os diferenciais.
-
-### Fase 1 — Fundação, CRUD e Qualidade
-
-| Bloco | Tarefa |
-|---|---|
-| 0-1h | Scaffold: `uv init`, estrutura de pastas, `pyproject.toml`, `.env.example`, `.gitignore`, **Makefile** |
-| 1-2h | Modelo `Book` (com `embedding` BLOB) + Alembic initial migration + schemas Pydantic |
-| 2-3h | Repository + Service + Router `/books` (CRUD básico + filtros + paginação) |
-| 3-4h | Tratamento de erros **RFC 7807** + **structlog** com `request_id` middleware |
-| 4-5h | Testes dos endpoints CRUD (happy path + erros) + fixtures com mock OpenRouter |
-| 5-6h | **Multi-stage Dockerfile** + `docker-compose.yml` + **Dev Container** (`devcontainer.json`) |
-| 6-7h | **Pre-commit hooks** + **Conventional Commits** config + primeiro commit/push |
-
-### Fase 2 — AI, CI/CD, Docs e Deploy
-
-| Bloco | Tarefa |
-|---|---|
-| 0-1h | **AI Layer**: wrapper OpenRouter (chat + embeddings), geração de resumo via `gpt-4o-mini`, embeddings via `bge-m3` |
-| 1-2h | Endpoint `/books/search/semantic` + recalcular embedding em create/update + testes |
-| 2-3h | **Scalar UI** em `/docs` + **landing page** HTML em `/` + healthcheck rico |
-| 3-4h | **CI workflow** (lint + typecheck + tests + **Schemathesis** + pip-audit) |
-| 4-5h | **Fly.io** setup + deploy manual + **CD workflow** (auto-deploy em push) |
-| 5-6h | **ADRs** (7 documentos) + **Mermaid diagrams** (arquitetura + request flow) |
-| 6-7h | README polido (badges, demo GIF, curl examples, seção AI features) + **release-please** + **Dependabot** |
-
----
-
-## 14. Relação com Outros Projetos do Portfólio
-
-Este repo faz parte de um trio de projetos que seguem as [[../CONVENTIONS|Engineering Conventions]] compartilhadas (commits, branches, README, releases, quality bars).
-
-| Repo | Stack principal |
-|---|---|
-| `virtual-library-api` (este) | FastAPI + SQLAlchemy + SQLite + OpenRouter |
-| `python-tutor-chatbot` | Chainlit + Langchain + OpenRouter |
-| `semantic-document-search` | FastAPI + Qdrant + OpenRouter (bge-m3) |
-
-**OpenRouter como integração comum** nos 3 garante consistência arquitetural — mesma pasta `app/ai/`, mesmo client, mesmo padrão de secrets.
-
----
-
-## 15. Riscos e Mitigações
-
-| Risco | Impacto | Mitigação |
-|---|---|---|
-| Stumble no Fly.io (primeira vez) | Alto (perde tempo no dia 2) | Testar deploy ao final do dia 1 com versão mínima; ter fallback para Railway |
-| Flaky tests com SQLite async | Médio | Usar `sqlite:///:memory:` + `StaticPool` ou testar síncrono |
-| Cobertura < 90% | Baixo | Escrever testes junto com código, não depois |
-| Escopo do README consumir muito tempo | Médio | Timebox 1h no dia 2; usar template |
-| **OpenRouter fora do ar** | Alto | `tenacity` com retry exponencial (3 tentativas); flag `AI_FEATURES_ENABLED=false` desativa graciosamente; endpoints retornam 503 com `application/problem+json` |
-| **Custo OpenRouter descontrolado** | Baixo | Limitar summary a 150 tokens + `gpt-4o-mini` (~$0.0005/resumo); `bge-m3` custa $0.01/M tokens; limite de spend configurado no dashboard |
-| **Modelo `baai/bge-m3` depreciado ou retirado** | Baixo | Modelo via env var; `embedding_model` coluna permite detectar vetores desatualizados e rebuild |
-| **Escopo dos diferenciais estoura o orçamento de tempo** | Médio | Priorizar por tier: AI features e CI/CD são must; ADRs e Mermaid podem entrar em follow-up commit |
-| **Schemathesis gera edge cases difíceis** | Médio | Começar com `--hypothesis-max-examples=10` e subir gradualmente |
-
----
-
-## 16. Referências
-
-- [FastAPI docs](https://fastapi.tiangolo.com/)
-- [SQLAlchemy 2.0 ORM](https://docs.sqlalchemy.org/en/20/orm/)
-- [uv docs](https://docs.astral.sh/uv/)
-- [Fly.io Python guide](https://fly.io/docs/languages-and-frameworks/python/)
-- [Ruff rules](https://docs.astral.sh/ruff/rules/)
-- [Scalar FastAPI integration](https://github.com/scalar/scalar/tree/main/packages/scalar_fastapi)
-- [RFC 7807 Problem Details](https://datatracker.ietf.org/doc/html/rfc7807)
-- [Schemathesis](https://schemathesis.readthedocs.io/)
-- [release-please](https://github.com/googleapis/release-please)
-- [ADR template (Michael Nygard)](https://github.com/joelparkerhenderson/architecture-decision-record)
-- [Dev Containers spec](https://containers.dev/)
-- [OpenRouter docs](https://openrouter.ai/docs)
-- [OpenRouter embeddings](https://openrouter.ai/docs/api/reference/embeddings)
-- [BAAI/bge-m3 model card](https://huggingface.co/BAAI/bge-m3)
-- [MTEB leaderboard (multilingual)](https://huggingface.co/spaces/mteb/leaderboard)
-
----
-
-## 17. Checklist Final de Entrega
-
-**Core:**
-- [ ] Todas as funcionalidades CRUD + busca implementadas
-- [ ] Testes unitários e de integração passando
-- [ ] README com setup e exemplos
-
-**Diferenciais:**
-- [ ] CI verde no GitHub (5 jobs)
-- [ ] Deploy público no Fly.io funcionando
-- [ ] URL pública do Scalar compartilhável
-- [ ] Commits seguindo Conventional Commits
-- [ ] Dev Container testado (GitHub Codespaces ou VSCode)
-- [ ] Landing page em `/` funcionando
-- [ ] AI features ativas em produção (resumo + busca semântica)
-- [ ] 7 ADRs escritos e linkados no README
-- [ ] Mermaid diagrams renderizando no GitHub
-- [ ] Primeira release criada via release-please
-- [ ] Dependabot configurado
-- [ ] Badges: CI, coverage, Python, release, license
-- [ ] Adicionar ao perfil GitHub como projeto em destaque
+- **Virtual Library API** (this repo) — FastAPI + SQLite + OpenRouter
+- **Python Tutor Chatbot** — Chainlit + LangChain + OpenRouter
+- **Semantic Document Search** — FastAPI + Qdrant + OpenRouter (package-by-feature, FSM-driven ingestion, functional retrieval pipeline)
