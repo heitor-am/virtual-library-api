@@ -4,6 +4,7 @@ from typing import Any
 from openai import APIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.embeddings import build_book_text, generate_embedding
 from app.ai.summary import generate_summary
 from app.config import get_settings
 from app.core.exceptions import BookNotFoundError, LLMUnavailableError
@@ -11,6 +12,9 @@ from app.models.book import Book, SummarySource
 from app.repositories.book import BookRepository, SortField, SortOrder, book_repository
 
 SummaryGenerator = Callable[[str, str], Awaitable[str]]
+EmbeddingGenerator = Callable[[str], Awaitable[bytes]]
+
+EMBEDDING_FIELDS = frozenset({"title", "author", "summary"})
 
 
 class BookService:
@@ -18,22 +22,25 @@ class BookService:
         self,
         repo: BookRepository | None = None,
         summary_generator: SummaryGenerator | None = None,
+        embedding_generator: EmbeddingGenerator | None = None,
     ) -> None:
         self.repo = repo or book_repository
         self.summary_generator: SummaryGenerator = summary_generator or generate_summary
+        self.embedding_generator: EmbeddingGenerator = embedding_generator or generate_embedding
 
     async def create(self, db: AsyncSession, **data: Any) -> Book:
         if self._should_auto_summarize(data):
             data = await self._enrich_with_summary(data)
+        if self._ai_available():
+            data = await self._enrich_with_embedding(data)
         return await self.repo.create(db, **data)
 
-    def _should_auto_summarize(self, data: dict[str, Any]) -> bool:
+    def _ai_available(self) -> bool:
         settings = get_settings()
-        return (
-            settings.ai_features_enabled
-            and bool(settings.openrouter_api_key)
-            and not data.get("summary")
-        )
+        return settings.ai_features_enabled and bool(settings.openrouter_api_key)
+
+    def _should_auto_summarize(self, data: dict[str, Any]) -> bool:
+        return self._ai_available() and not data.get("summary")
 
     async def _enrich_with_summary(self, data: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -44,6 +51,17 @@ class BookService:
         if generated:
             data["summary"] = generated
             data["summary_source"] = SummarySource.AI
+        return data
+
+    async def _enrich_with_embedding(self, data: dict[str, Any]) -> dict[str, Any]:
+        text = build_book_text(data["title"], data["author"], data.get("summary"))
+        try:
+            embedding = await self.embedding_generator(text)
+        except (LLMUnavailableError, APIError):
+            return data
+
+        data["embedding"] = embedding
+        data["embedding_model"] = get_settings().openrouter_embedding_model
         return data
 
     async def get(self, db: AsyncSession, book_id: int) -> Book:
@@ -77,7 +95,25 @@ class BookService:
         book = await self.repo.update(db, book_id, **data)
         if book is None:
             raise BookNotFoundError(f"Book with id {book_id} not found")
+
+        if EMBEDDING_FIELDS & data.keys() and self._ai_available():
+            book = await self._refresh_embedding(db, book)
         return book
+
+    async def _refresh_embedding(self, db: AsyncSession, book: Book) -> Book:
+        text = build_book_text(book.title, book.author, book.summary)
+        try:
+            embedding = await self.embedding_generator(text)
+        except (LLMUnavailableError, APIError):
+            return book
+
+        refreshed = await self.repo.update(
+            db,
+            book.id,
+            embedding=embedding,
+            embedding_model=get_settings().openrouter_embedding_model,
+        )
+        return refreshed or book
 
     async def delete(self, db: AsyncSession, book_id: int) -> None:
         deleted = await self.repo.delete(db, book_id)
